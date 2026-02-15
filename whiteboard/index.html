@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZenBoard Pro | Ultra-High Tech</title>
+    <style>
+        :root {
+            --bg: #0f1115; --panel: rgba(30, 32, 38, 0.8);
+            --accent: #00f7ff; --text: #ffffff;
+        }
+        [data-theme="light"] {
+            --bg: #f0f2f5; --panel: rgba(255, 255, 255, 0.8);
+            --accent: #007bff; --text: #1a1a1a;
+        }
+        * { box-sizing: border-box; touch-action: none; }
+        body { 
+            margin: 0; overflow: hidden; background: var(--bg); 
+            color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif;
+            transition: background 0.3s ease;
+        }
+        #canvas { display: block; cursor: crosshair; }
+        
+        /* Floating HUD */
+        .hud {
+            position: fixed; display: flex; align-items: center; gap: 12px;
+            padding: 10px 20px; background: var(--panel);
+            backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 100px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: 0.3s ease;
+        }
+        #toolbar { top: 20px; left: 50%; transform: translateX(-50%); }
+        #actions { bottom: 20px; right: 20px; border-radius: 20px; }
+
+        .tool-group { display: flex; gap: 8px; border-right: 1px solid #444; padding-right: 8px; }
+        .tool-group:last-child { border: none; }
+
+        button {
+            background: transparent; border: none; color: var(--text);
+            padding: 8px 12px; border-radius: 12px; cursor: pointer;
+            font-weight: 600; font-size: 13px; transition: 0.2s;
+        }
+        button:hover { background: rgba(255,255,255,0.1); scale: 1.05; }
+        button.active { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent); }
+        
+        input[type="color"] {
+            appearance: none; -webkit-appearance: none; border: none;
+            width: 30px; height: 30px; border-radius: 50%; cursor: pointer; background: none;
+        }
+        
+        .size-slider { width: 80px; accent-color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <div id="toolbar" class="hud">
+        <div class="tool-group">
+            <input type="color" id="colorPicker" value="#00f7ff">
+            <input type="range" id="sizeSlider" class="size-slider" min="1" max="50" value="5">
+        </div>
+        <div class="tool-group">
+            <button onclick="setTool('pen', this)" class="active">Pen</button>
+            <button onclick="setTool('neon', this)">Neon</button>
+            <button onclick="setTool('calligraphy', this)">Ink</button>
+            <button onclick="setTool('rainbow', this)">Magic</button>
+            <button onclick="setTool('eraser', this)">Eraser</button>
+        </div>
+    </div>
+
+    <div id="actions" class="hud">
+        <button onclick="toggleTheme()">🌓 Theme</button>
+        <button onclick="download()">💾 Download</button>
+        <button onclick="shareBoard()">🔗 Share</button>
+        <button onclick="clearCanvas()" style="color: #ff4444;">🗑️ Clear</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const sizeSlider = document.getElementById('sizeSlider');
+
+        let drawing = false, tool = 'pen', hue = 0;
+
+        const init = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+        };
+
+        window.addEventListener('resize', init);
+        init();
+
+        const getCoords = (e) => ({
+            x: e.touches ? e.touches[0].clientX : e.clientX,
+            y: e.touches ? e.touches[0].clientY : e.clientY
+        });
+
+        const start = (e) => { drawing = true; draw(e); };
+        const end = () => { drawing = false; ctx.beginPath(); };
+
+        function draw(e) {
+            if (!drawing) return;
+            const { x, y } = getCoords(e);
+            
+            ctx.lineWidth = sizeSlider.value;
+            ctx.strokeStyle = colorPicker.value;
+            ctx.shadowBlur = 0;
+            ctx.globalCompositeOperation = 'source-over';
+
+            if (tool === 'neon') {
+                ctx.shadowColor = colorPicker.value;
+                ctx.shadowBlur = sizeSlider.value * 1.5;
+            } else if (tool === 'calligraphy') {
+                ctx.lineWidth = sizeSlider.value * 2;
+                ctx.scale(1, 0.4);
+            } else if (tool === 'rainbow') {
+                ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+                hue = (hue + 10) % 360;
+            } else if (tool === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineWidth = sizeSlider.value * 4;
+            }
+
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+
+        function setTool(t, btn) {
+            tool = t;
+            document.querySelectorAll('#toolbar button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function toggleTheme() {
+            const theme = document.body.getAttribute('data-theme') === 'light' ? '' : 'light';
+            document.body.setAttribute('data-theme', theme);
+        }
+
+        function clearCanvas() {
+            if (confirm("Wipe the whole board?")) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        async function download() {
+            const link = document.createElement('a');
+            link.download = `zenboard-${Date.now()}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        async function shareBoard() {
+            try {
+                const blob = await (await fetch(canvas.toDataURL())).blob();
+                const file = new File([blob], 'whiteboard.png', { type: blob.type });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], title: 'My ZenBoard Draft' });
+                } else {
+                    alert("Sharing not supported on this browser. Try Download!");
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        canvas.addEventListener('mousedown', start);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', end);
+        canvas.addEventListener('touchstart', start);
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', end);
+    </script>
+</body>
+</html>
